@@ -1,0 +1,63 @@
+{
+  "name": "x402-audit",
+  "version": "0.1.0",
+  "description": "Audit an x402 seller without paying: discovery documents, the 402 PaymentRequired header, networks, USDC assets, prices and Bazaar metadata.",
+  "keywords": [
+    "x402",
+    "402",
+    "payment-required",
+    "usdc",
+    "stablecoin",
+    "agents",
+    "audit",
+    "lint",
+    "openapi"
+  ],
+  "license": "MIT",
+  "author": "Dmitrii Maslennikov",
+  "homepage": "https://github.com/atr-one/x402-audit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atr-one/x402-audit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/atr-one/x402-audit/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "x402-audit": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
