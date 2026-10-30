@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { audit } from './index.js';
 import { VERSION } from './http.js';
+import { resolveNetwork } from './networks.js';
 import { exitCode, formatConsole, formatMarkdown, type FailOn } from './report.js';
 
 const HELP = `x402-audit ${VERSION} - audit an x402 seller without paying
@@ -13,6 +14,8 @@ Usage: x402-audit <origin> [options]
 
 Options:
   --endpoint <path|url>       a paid endpoint to probe in addition to discovery (repeatable)
+  --network <caip2|alias>     audit only offers on this network, e.g. base, base-sepolia, ethereum, solana,
+                              eip155:8453 (repeatable, or comma-separated)
   --json <file>               write the full report as JSON ("-" for stdout instead of the text report)
   --md <file>                 write a Markdown report
   --fail-on <error|warn|none> exit 1 when a finding of this severity or worse exists (default: error)
@@ -52,6 +55,7 @@ async function main(): Promise<void> {
       allowPositionals: true,
       options: {
         endpoint: { type: 'string', multiple: true },
+        network: { type: 'string', multiple: true },
         json: { type: 'string' },
         md: { type: 'string' },
         'fail-on': { type: 'string' },
@@ -87,9 +91,17 @@ async function main(): Promise<void> {
   if (!['error', 'warn', 'none'].includes(failOn)) fail(`--fail-on must be error, warn or none, got "${failOn}"`);
   const concurrency = Math.floor(positiveNumber(o.concurrency, '--concurrency', 3));
   const maxEndpoints = Math.floor(positiveNumber(o['max-endpoints'], '--max-endpoints', 50));
+  const networks: string[] = [];
+  for (const n of (o.network ?? []).flatMap((v) => v.split(','))) {
+    if (n.trim() === '') continue;
+    const id = resolveNetwork(n);
+    if (!id) fail(`unknown network "${n.trim()}": use a CAIP-2 id such as eip155:8453 or an alias such as base, base-sepolia, ethereum, solana`);
+    if (!networks.includes(id)) networks.push(id);
+  }
 
   const report = await audit(positionals[0] as string, {
     endpoints: o.endpoint ?? [],
+    ...(networks.length ? { networks } : {}),
     timeoutMs: positiveNumber(o.timeout, '--timeout', 20) * 1000,
     concurrency,
     maxEndpoints,

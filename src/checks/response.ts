@@ -3,6 +3,7 @@
  * response body compared with it.
  */
 import { looksLikeBotWall, parseJson, request, type HttpContext, type HttpResult } from '../http.js';
+import { networkLabel, onNetworks } from '../networks.js';
 import { decodePaymentRequired, validatePaymentRequired } from '../payment-required.js';
 import type { EndpointResult, Finding, PaidEndpoint, PaymentRequired, PaymentRequirements } from '../types.js';
 
@@ -24,8 +25,11 @@ export async function sendUnpaid(ctx: HttpContext, ep: PaidEndpoint, extraHeader
   return request(ctx, ep.url, hasBody ? { method: ep.method, headers, body: JSON.stringify(ep.body ?? {}) } : { method: ep.method, headers });
 }
 
-/** Probe one endpoint and check status, header and body. */
-export async function probe402(ctx: HttpContext, ep: PaidEndpoint): Promise<Probe> {
+/**
+ * Probe one endpoint and check status, header and body. With `networks` (CAIP-2 ids), only the offers on those
+ * networks are checked, and an endpoint with none of them gets `network.not-offered`.
+ */
+export async function probe402(ctx: HttpContext, ep: PaidEndpoint, networks?: ReadonlySet<string>): Promise<Probe> {
   const res = await sendUnpaid(ctx, ep);
   const findings: Finding[] = [];
   const result: EndpointResult = { url: ep.url, method: ep.method, sources: ep.sources, timeMs: res.timeMs, findings };
@@ -82,9 +86,16 @@ export async function probe402(ctx: HttpContext, ep: PaidEndpoint): Promise<Prob
       add({ id: 'header.size', severity: 'warn', message: `PAYMENT-REQUIRED is ${kb(result.headerBytes)}; payers echo the accepted requirements back in PAYMENT-SIGNATURE and many proxies cap a header line at 8-16 KB.`, fix: 'Keep the header under 8 KB: drop descriptions and long examples from the bazaar extension.' });
   }
 
-  const v = validatePaymentRequired(pr);
+  const v = validatePaymentRequired(pr, networks ? { networks } : {});
   for (const f of v.findings) add(f);
   if (isObject(pr) && Array.isArray(pr['accepts'])) result.paymentRequired = pr as unknown as PaymentRequired;
+  if (networks && result.paymentRequired && result.paymentRequired.accepts.length > 0) {
+    const offered = result.paymentRequired.accepts.map((a) => (isObject(a) ? a['network'] : undefined));
+    if (!offered.some((n) => onNetworks(n, networks))) {
+      const names = [...new Set(offered.map((n) => (typeof n === 'string' ? networkLabel(n) : String(n))))].join(', ');
+      add({ id: 'network.not-offered', severity: 'error', message: `None of the ${offered.length} offer(s) is on the selected network(s) ${[...networks].map(networkLabel).join(', ')}; offered: ${names}.`, fix: 'Add an offer on that network if its clients should be able to pay, or audit another network.' });
+    }
+  }
 
   // resource.url should point at the endpoint itself
   const rUrl = isObject(pr) && isObject(pr['resource']) ? pr['resource']['url'] : undefined;
@@ -101,7 +112,7 @@ export async function probe402(ctx: HttpContext, ep: PaidEndpoint): Promise<Prob
 
   // body consistency
   if (header && bodyPr && result.paymentRequired) {
-    const diff = compareRequirements(result.paymentRequired, bodyPr);
+    const diff = compareRequirements(onlyNetworks(result.paymentRequired, networks), onlyNetworks(bodyPr, networks));
     if (diff) add({ id: 'pr.body-mismatch', severity: 'warn', message: `The body's PaymentRequired differs from the header: ${diff}.`, fix: 'Build both from the same object, or drop it from the body.' });
   }
   if (res.status === 402 && !body.ok && res.text.trim() !== '')
@@ -118,6 +129,12 @@ export function paymentRequiredInBody(body: unknown): unknown {
     if (isObject(v) && 'accepts' in v) return v;
   }
   return undefined;
+}
+
+/** The object with `accepts` narrowed to the selected networks (unchanged without a selection or without accepts). */
+function onlyNetworks<T>(pr: T, networks: ReadonlySet<string> | undefined): T {
+  if (!networks || !isObject(pr) || !Array.isArray(pr['accepts'])) return pr;
+  return { ...pr, accepts: pr['accepts'].filter((a: unknown) => onNetworks(isObject(a) ? a['network'] : undefined, networks)) };
 }
 
 const keyOf = (a: unknown) => {

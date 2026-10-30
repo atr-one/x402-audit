@@ -3,7 +3,7 @@
  * Both functions are pure and usable on their own.
  */
 import { checksumState, isSolanaAddress } from './address.js';
-import { NETWORKS, V1_NAMES, networkFamily, networkLabel, parseCaip2 } from './networks.js';
+import { NETWORKS, V1_NAMES, networkFamily, networkLabel, onNetworks, parseCaip2 } from './networks.js';
 import type { Finding, PaymentRequired, Severity } from './types.js';
 
 export type DecodeResult =
@@ -53,8 +53,16 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const ATOMIC = /^(0|[1-9][0-9]*)$/;
 const ZERO_EVM = /^0x0{40}$/i;
 
+export interface ValidateOptions {
+  /**
+   * Validate only the `accepts` entries on these CAIP-2 networks (a v1 name counts as the network it names). Messages
+   * keep the original `accepts[i]` index. Default: every entry.
+   */
+  networks?: Iterable<string>;
+}
+
 /** Validate a decoded PaymentRequired object against x402 v2. */
-export function validatePaymentRequired(input: unknown): ValidationResult {
+export function validatePaymentRequired(input: unknown, options: ValidateOptions = {}): ValidationResult {
   const findings: Finding[] = [];
   const add = (id: string, severity: Severity, message: string, fix?: string) => findings.push(fix ? { id, severity, message, fix } : { id, severity, message });
 
@@ -93,7 +101,10 @@ export function validatePaymentRequired(input: unknown): ValidationResult {
     return { valid: false, findings };
   }
   if (accepts.length === 0) add('pr.accepts', 'error', 'accepts is empty: nothing can be paid.', 'List at least one payment option in "accepts".');
-  accepts.forEach((a, i) => validateAccept(a, i, add));
+  const selected = options.networks ? new Set(options.networks) : undefined;
+  accepts.forEach((a, i) => {
+    if (onNetworks(isObject(a) ? a['network'] : undefined, selected)) validateAccept(a, i, add);
+  });
 
   // extensions
   if ('extensions' in input && !isObject(input['extensions'])) add('pr.extensions', 'warn', 'extensions is present but not an object.');

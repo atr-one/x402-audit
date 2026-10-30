@@ -34,6 +34,7 @@ x402-audit https://example.com --endpoint /api/paid --md report.md
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--endpoint <path or url>` | | A paid endpoint to probe in addition to discovery. Repeatable. |
+| `--network <caip2 or alias>` | all | Audit only the offers on this network. Repeatable, or comma-separated. See "Selecting networks". |
 | `--json <file>` | | Write the full report as JSON. `--json -` prints JSON to stdout instead of the text report. |
 | `--md <file>` | | Write a Markdown report. |
 | `--fail-on <error\|warn\|none>` | `error` | Exit 1 when a finding of this severity or worse exists. |
@@ -52,7 +53,7 @@ Exit codes, as with a linter: `0` no finding at the `--fail-on` level, `1` at le
 itself failed. In CI:
 
 ```sh
-npx --yes github:atr-one/x402-audit#v0.1.0 https://staging.example.com --fail-on warn --md x402-audit.md
+npx --yes github:atr-one/x402-audit#v0.2.0 https://staging.example.com --fail-on warn --md x402-audit.md
 ```
 
 ## GitHub Action
@@ -109,6 +110,44 @@ CI runs the action against the mock seller from the tests (`npm run mock-seller`
 5. Optionally asks the facilitator's discovery list which resources it has catalogued for each `payTo`.
 
 No payment is made, no private key is used, and nothing is signed.
+
+The text and Markdown reports list the endpoints, a price table with one row per offer (endpoint, method, network,
+price in USD, asset), and the findings. The price is shown when the asset is the network's USDC from the table below
+and the amount is in atomic units; otherwise the column shows `-` and the asset column the shortened address.
+
+## Selecting networks
+
+`--network` restricts the audit to the offers on the given networks. Offers on other networks are not validated, not
+priced, not compared with the body and not shown in the price table; their `payTo` is not looked up with
+`--facilitator-discovery`. Findings about the 402 as a whole (status, header, version, resource, Bazaar, CORS) are
+still reported, and `accepts[i]` in messages keeps the index of the original list.
+
+```sh
+x402-audit https://example.com --network base --network solana
+x402-audit https://example.com --network base-sepolia,eip155:84532
+```
+
+A network is a CAIP-2 id (any valid one, also outside the table) or one of these aliases, case-insensitive:
+
+| Alias | CAIP-2 |
+| --- | --- |
+| `base` | `eip155:8453` |
+| `base-sepolia` | `eip155:84532` |
+| `ethereum` | `eip155:1` |
+| `ethereum-sepolia`, `sepolia` | `eip155:11155111` |
+| `polygon`, `polygon-pos` | `eip155:137` |
+| `polygon-amoy` | `eip155:80002` |
+| `arbitrum`, `arbitrum-one` | `eip155:42161` |
+| `arbitrum-sepolia` | `eip155:421614` |
+| `op`, `optimism`, `op-mainnet` | `eip155:10` |
+| `op-sepolia`, `optimism-sepolia` | `eip155:11155420` |
+| `avalanche`, `avalanche-c-chain` | `eip155:43114` |
+| `avalanche-fuji` | `eip155:43113` |
+| `solana`, `solana-mainnet` | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` |
+| `solana-devnet` | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` |
+
+An offer that still uses a v1 network name (`"network": "base"`) counts as the network it names, so its mistakes are
+reported under `--network base`. An unknown name is a usage error (exit code 2).
 
 ## Checks
 
@@ -201,6 +240,12 @@ Accepted `x-payment-info` price shapes: `{"mode": "fixed", "currency": "USD", "a
 | `hygiene.latency` | info/warn | The 402 took over 2 s (info) or 5 s (warn). |
 | `hygiene.v1` | info/warn/error | What a v1 client sending `X-PAYMENT` gets: an explanation (info), a 5xx (warn), or the resource itself, meaning the payment was not verified (error). |
 
+### Network selection (`--network`)
+
+| Id | Severity | What |
+| --- | --- | --- |
+| `network.not-offered` | error | The 402 has offers, but none on the selected networks: clients on those networks cannot pay the endpoint. |
+
 ### Facilitator listing (`--facilitator-discovery`)
 
 | Id | Severity | What |
@@ -218,19 +263,26 @@ The query is `GET <facilitator>/discovery/resources?payTo=<address>&limit=100`.
 (`test/mock-seller.ts`, started with `npm run mock-seller -- flawed 4020`), shortened:
 
 ```text
-x402-audit 0.1.0  http://127.0.0.1:4020
+x402-audit 0.2.0  http://127.0.0.1:4020
 
 Discovery
   /.well-known/x402  200  3 resources
   /openapi.json      200  2 paid operations
 
 Endpoints (3)
-  402  GET  http://127.0.0.1:4020/api/search  6 ms
-        Base $0.02, ethereum 10000, Solana 0.01
-  402  POST http://127.0.0.1:4020/api/report  18 ms
-        Base $0.02, Ethereum $0.02, Solana $0.02
-  402  GET  http://127.0.0.1:4020/api/legacy  14 ms
-        base ?
+  402  GET  http://127.0.0.1:4020/api/search  8 ms
+  402  POST http://127.0.0.1:4020/api/report  22 ms
+  402  GET  http://127.0.0.1:4020/api/legacy  17 ms
+
+Prices
+  Endpoint     Method  Network   Price (USD)  Asset
+  /api/search  GET     Base      $0.02        USDC
+  /api/search  GET     ethereum  -            0xA0b8...eB48
+  /api/search  GET     Solana    -            USDC
+  /api/report  POST    Base      $0.02        USDC
+  /api/report  POST    Ethereum  $0.02        USDC
+  /api/report  POST    Solana    $0.02        USDC
+  /api/legacy  GET     base      -            0x8335...2913
 
 Findings
   error  discovery.openapi.security  top level: "security" holds an array ([]) where a requirement object belongs; the empty requirement must be {}.
@@ -272,22 +324,24 @@ are grouped in the text report; the JSON report keeps one entry per endpoint.
 ```ts
 import { audit, decodePaymentRequired, validatePaymentRequired, formatMarkdown } from 'x402-audit';
 
-const report = await audit('https://example.com', { endpoints: ['/api/paid'], timeoutMs: 10_000 });
+const report = await audit('https://example.com', { endpoints: ['/api/paid'], networks: ['base'], timeoutMs: 10_000 });
 console.log(report.summary); // { error: 0, warn: 2, info: 5 }
 console.log(formatMarkdown(report));
 
 // the header on its own, e.g. in a seller's own tests
 const decoded = decodePaymentRequired(response.headers.get('payment-required') ?? '');
 if (decoded.ok) {
-  const { valid, findings } = validatePaymentRequired(decoded.value);
+  const { valid, findings } = validatePaymentRequired(decoded.value); // or (value, { networks: ['eip155:8453'] })
 }
 ```
 
-`audit(origin, options)` options: `endpoints`, `timeoutMs`, `concurrency`, `maxPriceUsd`, `maxEndpoints`,
-`facilitatorDiscovery`, `facilitatorUrl`, `probeV1`, `userAgent`, and `fetch` (an injectable fetch for proxies or
-tests). Also exported: `toChecksumAddress`, `checksumState`, `isSolanaAddress`, `parseCaip2`, `NETWORKS`, `knownToken`,
-`formatUnits`, `parseUnits`, `usdPrice`, `parseOpenApi`, `parseWellKnown`, `parsePaymentInfo`, `formatConsole`,
-`exitCode`. The report type is `AuditReport` (see `src/types.ts`).
+`audit(origin, options)` options: `endpoints`, `networks` (CAIP-2 ids or aliases; `audit` throws on an unknown name),
+`timeoutMs`, `concurrency`, `maxPriceUsd`, `maxEndpoints`, `facilitatorDiscovery`, `facilitatorUrl`, `probeV1`,
+`userAgent`, and `fetch` (an injectable fetch for proxies or tests). Also exported: `toChecksumAddress`,
+`checksumState`, `isSolanaAddress`, `parseCaip2`, `NETWORKS`, `NETWORK_ALIASES`, `resolveNetwork`, `onNetworks`,
+`knownToken`, `formatUnits`, `parseUnits`, `usdPrice`, `parseOpenApi`, `parseWellKnown`, `parsePaymentInfo`,
+`formatConsole`, `priceRows` (the rows of the price table), `exitCode`. The report type is `AuditReport` (see
+`src/types.ts`); it carries `networks` when the audit was restricted.
 
 ## Networks and the USDC table
 

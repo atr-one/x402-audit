@@ -1,4 +1,4 @@
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 export const REPO_URL = 'https://github.com/atr-one/x402-audit';
 export const DEFAULT_USER_AGENT = `x402-audit/${VERSION} (+${REPO_URL})`;
 

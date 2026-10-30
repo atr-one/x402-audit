@@ -4,21 +4,23 @@ import { checkCors, checkLatency, probeV1 } from './checks/hygiene.js';
 import { checkPrice } from './checks/price.js';
 import { probe402 } from './checks/response.js';
 import { discover, normaliseOrigin } from './discovery.js';
+import { onNetworks, resolveNetwork } from './networks.js';
 import { DEFAULT_USER_AGENT, mapPool, VERSION, type HttpContext } from './http.js';
 import type { AuditOptions, AuditReport, EndpointResult, FacilitatorResult, Finding } from './types.js';
 
 export * from './types.js';
-export { decodePaymentRequired, validatePaymentRequired, type DecodeResult, type ValidationResult } from './payment-required.js';
-export { parseCaip2, networkFamily, networkInfo, knownToken, NETWORKS, V1_NAMES, type NetworkInfo, type TokenInfo, type Caip2 } from './networks.js';
+export { decodePaymentRequired, validatePaymentRequired, type DecodeResult, type ValidationResult, type ValidateOptions } from './payment-required.js';
+export { parseCaip2, networkFamily, networkInfo, knownToken, resolveNetwork, onNetworks, NETWORKS, NETWORK_ALIASES, V1_NAMES, type NetworkInfo, type TokenInfo, type Caip2 } from './networks.js';
 export { toChecksumAddress, checksumState, isEvmAddress, isSolanaAddress, base58Decode, type ChecksumState } from './address.js';
 export { formatUnits, parseUnits, usdPrice, parseDocumentedPrice, priceMatches } from './price.js';
 export { parseOpenApi, parseWellKnown, parsePaymentInfo, exampleFromSchema, normaliseOrigin } from './discovery.js';
-export { formatConsole, formatMarkdown, exitCode } from './report.js';
+export { formatConsole, formatMarkdown, exitCode, priceRows, type PriceRow } from './report.js';
 export { VERSION, DEFAULT_USER_AGENT } from './http.js';
 
 /**
  * Audit an x402 seller without paying: read its discovery documents, request each paid endpoint unpaid, and check the
- * 402 it answers. Never sends a payment.
+ * 402 it answers. Never sends a payment. Throws when `options.networks` holds a name that is neither a known alias nor
+ * CAIP-2.
  */
 export async function audit(origin: string, options: AuditOptions = {}): Promise<AuditReport> {
   const started = Date.now();
@@ -29,15 +31,25 @@ export async function audit(origin: string, options: AuditOptions = {}): Promise
     userAgent: options.userAgent ?? DEFAULT_USER_AGENT
   };
   const maxUsd = options.maxPriceUsd ?? 10;
+  let networks: Set<string> | undefined;
+  if (options.networks?.length) {
+    networks = new Set();
+    for (const n of options.networks) {
+      const id = resolveNetwork(n);
+      if (!id) throw new Error(`unknown network "${n}": use a CAIP-2 id (eip155:8453) or an alias (base, base-sepolia, ethereum, solana, ...)`);
+      networks.add(id);
+    }
+  }
 
   const discovery = await discover(ctx, base, options.endpoints ?? [], options.maxEndpoints ?? 50);
 
   const endpoints: EndpointResult[] = await mapPool(discovery.endpoints, options.concurrency ?? 3, async (ep) => {
-    const { result, response } = await probe402(ctx, ep);
+    const { result, response } = await probe402(ctx, ep, networks);
     if (result.status !== undefined) result.findings.push(...checkCors(response.headers, ep.url), ...checkLatency(result.timeMs, ep.url));
     const pr = result.paymentRequired;
     if (pr) {
-      result.findings.push(...checkPrice(pr, ep.price, maxUsd, ep.url));
+      const selected = networks ? { ...pr, accepts: pr.accepts.filter((a) => onNetworks(a?.network, networks)) } : pr;
+      result.findings.push(...checkPrice(selected, ep.price, maxUsd, ep.url));
       result.findings.push(...checkBazaar(pr, ep.method, result.headerBytes, ep.url));
     }
     return result;
@@ -54,7 +66,7 @@ export async function audit(origin: string, options: AuditOptions = {}): Promise
   let facilitator: FacilitatorResult[] | undefined;
   if (options.facilitatorDiscovery) {
     const payTos = new Set<string>();
-    for (const r of endpoints) for (const a of r.paymentRequired?.accepts ?? []) if (typeof a?.payTo === 'string' && a.payTo) payTos.add(a.payTo);
+    for (const r of endpoints) for (const a of r.paymentRequired?.accepts ?? []) if (typeof a?.payTo === 'string' && a.payTo && onNetworks(a.network, networks)) payTos.add(a.payTo);
     const audited = endpoints.map((e) => e.url);
     facilitator = [];
     for (const payTo of [...payTos].slice(0, 5)) {
@@ -77,6 +89,7 @@ export async function audit(origin: string, options: AuditOptions = {}): Promise
     findings,
     summary
   };
+  if (networks) report.networks = [...networks];
   if (facilitator) report.facilitator = facilitator;
   return report;
 }

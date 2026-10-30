@@ -121,3 +121,40 @@ export function knownToken(network: string, asset: string): TokenInfo | undefine
   const same = networkFamily(network) === 'evm' ? usdc.address.toLowerCase() === asset.toLowerCase() : usdc.address === asset;
   return same ? usdc : undefined;
 }
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+/**
+ * Short names accepted for a network (`--network base`): each table name in lowercase with dashes (`base-sepolia`,
+ * `op-mainnet`, `avalanche-c-chain`), each v1 name (`ethereum`, `sepolia`, `optimism`, `solana-devnet`) and a few
+ * common ones (`op`, `polygon-pos`, `solana-mainnet`).
+ */
+export const NETWORK_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  ...Object.fromEntries(Object.values(NETWORKS).flatMap((n) => [[slug(n.name), n.id], ...(n.v1Name ? [[n.v1Name, n.id]] : [])])),
+  op: 'eip155:10',
+  'polygon-pos': 'eip155:137',
+  'solana-mainnet': 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'
+});
+
+/**
+ * A network given by a person (`base`, `Base-Sepolia`, `eip155:8453`, `solana:5eykt4...`) -> its CAIP-2 id. Aliases are
+ * case-insensitive; any valid CAIP-2 id is accepted as is, also one outside the table. Undefined when it is neither.
+ */
+export function resolveNetwork(input: string): string | undefined {
+  const s = input.trim();
+  const key = s.toLowerCase();
+  if (Object.hasOwn(NETWORK_ALIASES, key)) return NETWORK_ALIASES[key];
+  const colon = s.indexOf(':');
+  const caip = colon > 0 ? s.slice(0, colon).toLowerCase() + s.slice(colon) : s;
+  return parseCaip2(caip) ? caip : undefined;
+}
+
+/**
+ * Whether an offer's `network` is one of `selected` (CAIP-2 ids). A v1 name counts as the network it names, so a
+ * broken `"network": "base"` offer is still audited under `--network base`. No selection selects every offer.
+ */
+export function onNetworks(network: unknown, selected?: ReadonlySet<string>): boolean {
+  if (!selected) return true;
+  if (typeof network !== 'string') return false;
+  return selected.has(Object.hasOwn(V1_NAMES, network) ? (V1_NAMES[network] as string) : network);
+}

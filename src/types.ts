@@ -90,6 +90,8 @@ export interface AuditReport {
   discovery: DiscoveryResult;
   endpoints: EndpointResult[];
   facilitator?: FacilitatorResult[];
+  /** The CAIP-2 networks the audit was restricted to (`networks` option); absent when every offer was audited. */
+  networks?: string[];
   findings: Finding[];
   summary: { error: number; warn: number; info: number };
 }
@@ -109,6 +111,11 @@ export interface AuditOptions {
   facilitatorUrl?: string;
   /** Send a probe with a v1 `X-PAYMENT` header to see how v1 clients are answered. Default true. */
   probeV1?: boolean;
+  /**
+   * Audit only the offers on these networks: CAIP-2 ids or aliases such as `base`, `base-sepolia`, `ethereum`,
+   * `solana` (see `NETWORK_ALIASES`). Offers on other networks are not validated, priced or shown. Default: all.
+   */
+  networks?: string[];
   /** Probe at most this many endpoints found by discovery (CLI endpoints are always probed). Default 50. */
   maxEndpoints?: number;
   userAgent?: string;

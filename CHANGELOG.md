@@ -3,6 +3,33 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-30
+
+### Added
+
+- `--network <caip2 or alias>` (repeatable or comma-separated) and the `networks` option of `audit()`: audit only the
+  offers on those networks. Aliases such as `base`, `base-sepolia`, `ethereum`, `solana` resolve to CAIP-2; an offer
+  with a v1 network name counts as that network. New check `network.not-offered` (error) when an endpoint has no offer
+  on the selected networks. `validatePaymentRequired(value, { networks })` takes the same selection. New exports:
+  `resolveNetwork`, `onNetworks`, `NETWORK_ALIASES`, `priceRows`.
+- A price table in the text and Markdown reports: one row per offer with endpoint, method, network, price in USD and
+  asset symbol.
+- GitHub Action (`action.yml`, composite): `uses: atr-one/x402-audit@v0.2.0` with the inputs `origin`, `endpoints`,
+  `fail-on`, `json`, `md` and `facilitator-discovery`; the Markdown report goes to the job summary. CI runs it against
+  the mock seller.
+- `npm run mock-seller -- good|flawed [port]` runs the mock seller from the tests as a standalone server.
+- USDC for Arbitrum Sepolia (`0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d`) and OP Sepolia
+  (`0x5fd84259d66Cd46123540766Be93DFE6D43130D7`).
+
+### Changed
+
+- The USDC table was checked against Circle's contract list
+  (https://developers.circle.com/stablecoins/usdc-contract-addresses) on 2026-10-30: every address matched; the EIP-712
+  names were read from the contracts on-chain and matched too. Ethereum Sepolia, Polygon Amoy and Avalanche Fuji went
+  from `medium` to `high` confidence, so a non-canonical asset or a wrong EIP-712 domain on them is now a warning instead of info.
+- The offers line under each endpoint in the text report, and the Offers column of the Markdown endpoint table, gave
+  way to the price table.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

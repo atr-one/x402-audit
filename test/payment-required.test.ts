@@ -131,3 +131,33 @@ describe('validatePaymentRequired', () => {
     expect(ids(validatePaymentRequired(pr), 'warn')).toContain('pr.accept.scheme');
   });
 });
+
+describe('validatePaymentRequired with a network selection', () => {
+  const broken = () => {
+    const pr = clone(goodPaymentRequired());
+    pr.accepts[0]!.amount = '0.01'; // Base
+    pr.accepts[1]!.network = 'ethereum'; // Ethereum, v1 name
+    return pr;
+  };
+
+  it('checks only the offers on the selected networks and keeps their accepts[] index', () => {
+    const all = validatePaymentRequired(broken());
+    expect(all.findings.map((f) => f.message.slice(0, 11))).toEqual(expect.arrayContaining(['accepts[0].', 'accepts[1].']));
+
+    const base = validatePaymentRequired(broken(), { networks: ['eip155:8453'] });
+    expect(base.findings.map((f) => f.id)).toEqual(['pr.accept.amount']);
+    expect(base.findings[0]?.message).toMatch(/^accepts\[0\]\.amount/);
+
+    const eth = validatePaymentRequired(broken(), { networks: ['eip155:1'] });
+    expect(eth.findings.map((f) => f.id)).toEqual(['pr.accept.network']);
+    expect(eth.findings[0]?.message).toMatch(/^accepts\[1\]\.network/);
+
+    expect(validatePaymentRequired(broken(), { networks: ['solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'] }).findings).toEqual([]);
+  });
+
+  it('still reports problems of the whole object', () => {
+    const pr = clone(goodPaymentRequired()) as unknown as Record<string, unknown>;
+    pr['x402Version'] = 1;
+    expect(ids(validatePaymentRequired(pr, { networks: ['eip155:137'] }))).toEqual(['pr.version']);
+  });
+});

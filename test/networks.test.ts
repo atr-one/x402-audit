@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checksumState, isSolanaAddress } from '../src/address.js';
-import { knownToken, NETWORKS, networkFamily, parseCaip2, V1_NAMES } from '../src/networks.js';
+import { knownToken, NETWORK_ALIASES, NETWORKS, networkFamily, onNetworks, parseCaip2, resolveNetwork, V1_NAMES } from '../src/networks.js';
 
 describe('CAIP-2', () => {
   it('parses valid chain ids', () => {
@@ -83,5 +83,72 @@ describe('network table', () => {
     expect(knownToken('eip155:8453', '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913')?.symbol).toBe('USDC');
     expect(knownToken('eip155:1', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')).toBeUndefined();
     expect(knownToken('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', 'epjfwdd5aufqssqem2qn1xzybapc8g4wegggzwytdt1v')).toBeUndefined();
+  });
+});
+
+describe('network aliases', () => {
+  const SOL = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+
+  it('resolves names, v1 names and common short names to CAIP-2', () => {
+    const cases: Record<string, string> = {
+      base: 'eip155:8453',
+      'base-sepolia': 'eip155:84532',
+      ethereum: 'eip155:1',
+      'ethereum-sepolia': 'eip155:11155111',
+      sepolia: 'eip155:11155111',
+      polygon: 'eip155:137',
+      'polygon-pos': 'eip155:137',
+      'polygon-amoy': 'eip155:80002',
+      arbitrum: 'eip155:42161',
+      'arbitrum-one': 'eip155:42161',
+      'arbitrum-sepolia': 'eip155:421614',
+      op: 'eip155:10',
+      optimism: 'eip155:10',
+      'op-mainnet': 'eip155:10',
+      'op-sepolia': 'eip155:11155420',
+      'optimism-sepolia': 'eip155:11155420',
+      avalanche: 'eip155:43114',
+      'avalanche-c-chain': 'eip155:43114',
+      'avalanche-fuji': 'eip155:43113',
+      solana: SOL,
+      'solana-mainnet': SOL,
+      'solana-devnet': 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'
+    };
+    for (const [alias, id] of Object.entries(cases)) expect(resolveNetwork(alias), alias).toBe(id);
+  });
+
+  it('ignores case and surrounding spaces in aliases', () => {
+    expect(resolveNetwork('Base')).toBe('eip155:8453');
+    expect(resolveNetwork(' BASE-SEPOLIA ')).toBe('eip155:84532');
+  });
+
+  it('takes CAIP-2 ids as they are, also outside the table, and lowercases only the namespace', () => {
+    expect(resolveNetwork('eip155:8453')).toBe('eip155:8453');
+    expect(resolveNetwork('EIP155:8453')).toBe('eip155:8453');
+    expect(resolveNetwork('eip155:999999')).toBe('eip155:999999');
+    expect(resolveNetwork(SOL)).toBe(SOL);
+    expect(resolveNetwork('SOLANA:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp')).toBe(SOL);
+  });
+
+  it('refuses what is neither an alias nor CAIP-2', () => {
+    for (const bad of ['', '  ', 'nope', 'bsc', '8453', 'eip155:', 'toString', 'constructor']) expect(resolveNetwork(bad), bad).toBeUndefined();
+  });
+
+  it('every alias points at a network in the table', () => {
+    for (const [alias, id] of Object.entries(NETWORK_ALIASES)) {
+      expect(NETWORKS[id], alias).toBeDefined();
+      expect(alias).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+    }
+  });
+
+  it('selects offers by CAIP-2 id, counting a v1 name as its network', () => {
+    const base = new Set(['eip155:8453']);
+    expect(onNetworks('eip155:8453', base)).toBe(true);
+    expect(onNetworks('base', base)).toBe(true);
+    expect(onNetworks('eip155:1', base)).toBe(false);
+    expect(onNetworks('ethereum', base)).toBe(false);
+    expect(onNetworks(undefined, base)).toBe(false);
+    expect(onNetworks('toString', base)).toBe(false);
+    expect(onNetworks('anything', undefined)).toBe(true);
   });
 });
