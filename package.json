@@ -50,6 +50,7 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "lint": "tsc --noEmit",
+    "mock-seller": "tsc -p tsconfig.mock-seller.json && node .mock-seller/test/serve-mock-seller.js",
     "prepublishOnly": "npm run lint && npm test && npm run build"
   },
   "dependencies": {

@@ -55,6 +55,48 @@ itself failed. In CI:
 npx --yes github:atr-one/x402-audit#v0.1.0 https://staging.example.com --fail-on warn --md x402-audit.md
 ```
 
+## GitHub Action
+
+The repository is also a composite action. It sets up Node.js 22, builds the tool from the action's own checkout
+(`npm ci` and `npm run build`), runs the CLI and appends the Markdown report to the job summary. The step fails when
+the CLI exits non-zero, that is when a finding at the `fail-on` level exists or the tool itself failed.
+
+```yaml
+name: x402 audit
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: atr-one/x402-audit@v0.2.0
+        with:
+          origin: https://staging.example.com
+          endpoints: |
+            /api/search
+            /api/report
+          fail-on: warn
+          json: x402-audit.json
+```
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `origin` | (required) | The seller to audit. |
+| `endpoints` | | Paid endpoints to probe in addition to discovery, one path or URL per line. Blank lines are ignored. |
+| `fail-on` | `error` | `error`, `warn` or `none`, as `--fail-on`. |
+| `json` | | Write the JSON report to this file, relative to the workspace. |
+| `md` | | Also write the Markdown report to this file. The job summary gets it either way. |
+| `facilitator-discovery` | `false` | `true` adds `--facilitator-discovery`. |
+
+Output: `exit-code` (0, 1 or 2, as the CLI). The `actions/setup-node` step changes the Node.js version for the steps
+that follow in the same job; put the audit in its own job, or set up your own Node.js version after it. The repository's
+CI runs the action against the mock seller from the tests (`npm run mock-seller`, see Development).
+
 ## What it does
 
 1. Fetches `/.well-known/x402` and `/openapi.json` and collects the paid endpoints: every URL in `resources`, and every
@@ -173,7 +215,7 @@ The query is `GET <facilitator>/discovery/resources?payTo=<address>&limit=100`.
 ## Example
 
 `x402-audit http://127.0.0.1:4020` against the deliberately flawed mock seller used in the tests
-(`test/mock-seller.ts`), shortened:
+(`test/mock-seller.ts`, started with `npm run mock-seller -- flawed 4020`), shortened:
 
 ```text
 x402-audit 0.1.0  http://127.0.0.1:4020
@@ -301,6 +343,7 @@ npm install
 npm test        # vitest, including an in-process mock seller
 npm run lint    # tsc --noEmit
 npm run build   # dist/
+npm run mock-seller -- good 4020   # the tests' mock seller on http://127.0.0.1:4020 (or: flawed)
 ```
 
 ## License

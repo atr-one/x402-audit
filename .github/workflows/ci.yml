@@ -26,3 +26,66 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: node dist/cli.js --version
+
+  action:
+    name: GitHub Action against the mock seller
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start the mock sellers (good on 4020, flawed on 4021)
+        run: |
+          start() {
+            npm run mock-seller -- "$1" "$2" > "mock-$1.log" 2>&1 &
+            for i in $(seq 1 60); do
+              curl -sf "http://127.0.0.1:$2/.well-known/x402" > /dev/null && return 0
+              sleep 1
+            done
+            cat "mock-$1.log"
+            return 1
+          }
+          start good 4020
+          start flawed 4021
+
+      - name: Audit the good seller
+        id: good
+        uses: ./
+        with:
+          origin: http://127.0.0.1:4020
+          endpoints: |
+            /api/search
+
+            /api/report
+          fail-on: warn
+          json: good.json
+          md: good.md
+
+      - name: Audit the flawed seller (must fail)
+        id: flawed
+        continue-on-error: true
+        uses: ./
+        with:
+          origin: http://127.0.0.1:4021
+          json: flawed.json
+
+      - name: Check the action's results
+        env:
+          GOOD_EXIT: ${{ steps.good.outputs.exit-code }}
+          FLAWED_OUTCOME: ${{ steps.flawed.outcome }}
+        run: |
+          test "$GOOD_EXIT" = 0
+          test "$FLAWED_OUTCOME" = failure
+          test -s good.md
+          grep -q '^# x402 audit: http://127.0.0.1:4020' good.md
+          node -e '
+            const fs = require("node:fs");
+            const good = JSON.parse(fs.readFileSync("good.json", "utf8"));
+            const flawed = JSON.parse(fs.readFileSync("flawed.json", "utf8"));
+            if (good.endpoints.length !== 2 || good.summary.error || good.summary.warn) throw new Error("good: " + JSON.stringify(good.summary));
+            if (!flawed.summary.error) throw new Error("flawed: no errors");
+            console.log("good", good.summary, "flawed", flawed.summary);
+          '

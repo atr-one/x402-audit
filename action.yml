@@ -1,0 +1,86 @@
+name: x402-audit
+description: Audit an x402 seller without paying, and add the Markdown report to the job summary.
+author: Dmitrii Maslennikov
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  origin:
+    description: Origin of the seller to audit, e.g. https://staging.example.com
+    required: true
+  endpoints:
+    description: Paid endpoints to probe in addition to discovery, one path or URL per line.
+    required: false
+    default: ''
+  fail-on:
+    description: Fail the step when a finding of this severity or worse exists (error, warn or none).
+    required: false
+    default: error
+  json:
+    description: Write the full JSON report to this file (relative to the workspace).
+    required: false
+    default: ''
+  md:
+    description: Write the Markdown report to this file as well (relative to the workspace). The job summary gets it either way.
+    required: false
+    default: ''
+  facilitator-discovery:
+    description: Ask the facilitator's discovery list whether it knows the seller's resources (true or false).
+    required: false
+    default: 'false'
+
+outputs:
+  exit-code:
+    description: Exit code of the CLI (0 no finding at the fail-on level, 1 findings at that level, 2 usage error or tool failure).
+    value: ${{ steps.audit.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Build x402-audit
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+
+    - name: Run x402-audit
+      id: audit
+      shell: bash
+      env:
+        X402_ACTION_PATH: ${{ github.action_path }}
+        X402_ORIGIN: ${{ inputs.origin }}
+        X402_ENDPOINTS: ${{ inputs.endpoints }}
+        X402_FAIL_ON: ${{ inputs.fail-on }}
+        X402_JSON: ${{ inputs.json }}
+        X402_MD: ${{ inputs.md }}
+        X402_FACILITATOR_DISCOVERY: ${{ inputs.facilitator-discovery }}
+        # on Windows runners bash is Git Bash, which would turn an endpoint such as /api/paid into a Windows path
+        MSYS_NO_PATHCONV: '1'
+      run: |
+        args=("$X402_ORIGIN" --fail-on "$X402_FAIL_ON")
+        while IFS= read -r line; do
+          line="${line#"${line%%[![:space:]]*}"}"
+          line="${line%"${line##*[![:space:]]}"}"
+          [ -n "$line" ] && args+=(--endpoint "$line")
+        done <<< "$X402_ENDPOINTS"
+        [ -n "$X402_JSON" ] && args+=(--json "$X402_JSON")
+        md="${X402_MD:-$RUNNER_TEMP/x402-audit.md}"
+        rm -f "$md"
+        args+=(--md "$md")
+        case "$X402_FACILITATOR_DISCOVERY" in
+          true | True | TRUE | 1 | yes) args+=(--facilitator-discovery) ;;
+        esac
+
+        code=0
+        node "$X402_ACTION_PATH/dist/cli.js" "${args[@]}" || code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        if [ -f "$md" ]; then
+          cat "$md" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "x402-audit did not produce a report (exit code $code)." >> "$GITHUB_STEP_SUMMARY"
+        fi
+        exit "$code"

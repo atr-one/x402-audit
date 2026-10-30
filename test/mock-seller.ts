@@ -74,7 +74,8 @@ const json = (res: ServerResponse, status: number, body: unknown, headers: Recor
   res.end(JSON.stringify(body));
 };
 
-export async function startMockSeller(variant: Variant = 'good'): Promise<MockSeller> {
+/** Start the mock seller on 127.0.0.1. `port` 0 (the default) picks a free port. */
+export async function startMockSeller(variant: Variant = 'good', port = 0): Promise<MockSeller> {
   const requests: MockSeller['requests'] = [];
   let origin = '';
   const cors = (): Record<string, string> =>
@@ -133,7 +134,7 @@ export async function startMockSeller(variant: Variant = 'good'): Promise<MockSe
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => handle(req, res, Buffer.concat(chunks).toString('utf8')));
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return {
     origin,

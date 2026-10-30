@@ -6,3 +6,4 @@ coverage/
 .DS_Store
 x402-audit.md
 x402-audit.json
+.mock-seller/
