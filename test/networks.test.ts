@@ -49,6 +49,34 @@ describe('network table', () => {
       expect(NETWORKS[id]?.usdc, id).toBeDefined();
   });
 
+  it('matches the USDC table checked on 2026-10-30 (Circle contract list; EIP-712 name read on-chain)', () => {
+    // https://developers.circle.com/stablecoins/usdc-contract-addresses, addresses copied verbatim
+    const verified: Record<string, [address: string, eip712Name?: string]> = {
+      'eip155:8453': ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USD Coin'],
+      'eip155:84532': ['0x036CbD53842c5426634e7929541eC2318f3dCF7e', 'USDC'],
+      'eip155:1': ['0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 'USD Coin'],
+      'eip155:11155111': ['0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 'USDC'],
+      'eip155:137': ['0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', 'USD Coin'],
+      'eip155:80002': ['0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', 'USDC'],
+      'eip155:42161': ['0xaf88d065e77c8cC2239327C5EDb3A432268e5831', 'USD Coin'],
+      'eip155:421614': ['0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', 'USD Coin'],
+      'eip155:10': ['0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', 'USD Coin'],
+      'eip155:11155420': ['0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 'USDC'],
+      'eip155:43114': ['0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', 'USD Coin'],
+      'eip155:43113': ['0x5425890298aed601595a70AB815c96711a31Bc65', 'USD Coin'],
+      'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp': ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'],
+      'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1': ['4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU']
+    };
+    const withUsdc = Object.values(NETWORKS).filter((n) => n.usdc);
+    expect(withUsdc.map((n) => n.id).sort()).toEqual(Object.keys(verified).sort());
+    for (const n of withUsdc) {
+      const [address, name] = verified[n.id]!;
+      expect(n.usdc?.address, n.name).toBe(address);
+      expect(n.usdc?.eip712?.name, n.name).toBe(name);
+      expect(n.usdc?.confidence, n.name).toBe('high');
+    }
+  });
+
   it('maps v1 names and finds tokens case-insensitively on EVM', () => {
     expect(V1_NAMES['base']).toBe('eip155:8453');
     expect(V1_NAMES['solana']).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');

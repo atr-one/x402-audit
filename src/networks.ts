@@ -5,10 +5,17 @@
  * `solana:<first 32 chars of the genesis hash>` for Solana clusters. v1 used short names such as `base`.
  *
  * The USDC table is used to flag an `asset` that is not the canonical USDC of its network and to know the token's
- * decimals and EIP-712 domain. `confidence: 'high'` entries were checked against Circle's published contract lists
- * and widely used x402 configurations; `'medium'` entries are believed correct but were not re-verified for this
- * release, so a mismatch against them is reported as info rather than a warning. To extend the table, add an entry to
- * NETWORKS (see README, "Networks and the USDC table").
+ * decimals and EIP-712 domain. `confidence: 'high'` entries were checked against the issuer's published contract list;
+ * `'medium'` entries are believed correct but not verified, so a mismatch against them is reported as info rather
+ * than a warning. To extend the table, add an entry to NETWORKS (see README, "Networks and the USDC table").
+ *
+ * USDC table checked on 2026-10-30:
+ * - Every address (EVM and Solana) matches Circle's list character for character:
+ *   https://developers.circle.com/stablecoins/usdc-contract-addresses
+ * - Circle's list does not give the EIP-712 domain. For every EVM entry, `name()`, `version()` and `decimals()` were
+ *   read from the contract itself (eth_call on a public RPC endpoint, chain id checked); USDC (FiatToken v2) builds its
+ *   EIP-712 domain from `name()` and version "2". Mainnets answer "USD Coin"; Base Sepolia, Ethereum Sepolia,
+ *   Polygon Amoy and OP Sepolia answer "USDC"; Arbitrum Sepolia and Avalanche Fuji answer "USD Coin".
  */
 
 export interface Caip2 {
@@ -66,15 +73,15 @@ export const NETWORKS: Record<string, NetworkInfo> = {
   'eip155:8453': { id: 'eip155:8453', name: 'Base', testnet: false, v1Name: 'base', usdc: usdcEvm('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USD Coin') },
   'eip155:84532': { id: 'eip155:84532', name: 'Base Sepolia', testnet: true, v1Name: 'base-sepolia', usdc: usdcEvm('0x036CbD53842c5426634e7929541eC2318f3dCF7e', 'USDC') },
   'eip155:1': { id: 'eip155:1', name: 'Ethereum', testnet: false, v1Name: 'ethereum', usdc: usdcEvm('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', 'USD Coin') },
-  'eip155:11155111': { id: 'eip155:11155111', name: 'Ethereum Sepolia', testnet: true, v1Name: 'sepolia', usdc: usdcEvm('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 'USDC', 'medium') },
+  'eip155:11155111': { id: 'eip155:11155111', name: 'Ethereum Sepolia', testnet: true, v1Name: 'sepolia', usdc: usdcEvm('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 'USDC') },
   'eip155:137': { id: 'eip155:137', name: 'Polygon', testnet: false, v1Name: 'polygon', usdc: usdcEvm('0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', 'USD Coin') },
-  'eip155:80002': { id: 'eip155:80002', name: 'Polygon Amoy', testnet: true, v1Name: 'polygon-amoy', usdc: usdcEvm('0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', 'USDC', 'medium') },
+  'eip155:80002': { id: 'eip155:80002', name: 'Polygon Amoy', testnet: true, v1Name: 'polygon-amoy', usdc: usdcEvm('0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', 'USDC') },
   'eip155:42161': { id: 'eip155:42161', name: 'Arbitrum One', testnet: false, v1Name: 'arbitrum', usdc: usdcEvm('0xaf88d065e77c8cC2239327C5EDb3A432268e5831', 'USD Coin') },
-  'eip155:421614': { id: 'eip155:421614', name: 'Arbitrum Sepolia', testnet: true, v1Name: 'arbitrum-sepolia' },
+  'eip155:421614': { id: 'eip155:421614', name: 'Arbitrum Sepolia', testnet: true, v1Name: 'arbitrum-sepolia', usdc: usdcEvm('0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', 'USD Coin') },
   'eip155:10': { id: 'eip155:10', name: 'OP Mainnet', testnet: false, v1Name: 'optimism', usdc: usdcEvm('0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', 'USD Coin') },
-  'eip155:11155420': { id: 'eip155:11155420', name: 'OP Sepolia', testnet: true, v1Name: 'optimism-sepolia' },
+  'eip155:11155420': { id: 'eip155:11155420', name: 'OP Sepolia', testnet: true, v1Name: 'optimism-sepolia', usdc: usdcEvm('0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 'USDC') },
   'eip155:43114': { id: 'eip155:43114', name: 'Avalanche C-Chain', testnet: false, v1Name: 'avalanche', usdc: usdcEvm('0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', 'USD Coin') },
-  'eip155:43113': { id: 'eip155:43113', name: 'Avalanche Fuji', testnet: true, v1Name: 'avalanche-fuji', usdc: usdcEvm('0x5425890298aed601595a70AB815c96711a31Bc65', 'USD Coin', 'medium') },
+  'eip155:43113': { id: 'eip155:43113', name: 'Avalanche Fuji', testnet: true, v1Name: 'avalanche-fuji', usdc: usdcEvm('0x5425890298aed601595a70AB815c96711a31Bc65', 'USD Coin') },
   'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp': {
     id: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
     name: 'Solana',

@@ -256,20 +256,28 @@ tests). Also exported: `toChecksumAddress`, `checksumState`, `isSolanaAddress`, 
 | Base | `eip155:8453` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | USD Coin | high |
 | Base Sepolia | `eip155:84532` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | USDC | high |
 | Ethereum | `eip155:1` | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` | USD Coin | high |
-| Ethereum Sepolia | `eip155:11155111` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | USDC | medium |
+| Ethereum Sepolia | `eip155:11155111` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | USDC | high |
 | Polygon PoS | `eip155:137` | `0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359` | USD Coin | high |
-| Polygon Amoy | `eip155:80002` | `0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582` | USDC | medium |
+| Polygon Amoy | `eip155:80002` | `0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582` | USDC | high |
 | Arbitrum One | `eip155:42161` | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | USD Coin | high |
+| Arbitrum Sepolia | `eip155:421614` | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | USD Coin | high |
 | OP Mainnet | `eip155:10` | `0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85` | USD Coin | high |
+| OP Sepolia | `eip155:11155420` | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` | USDC | high |
 | Avalanche C-Chain | `eip155:43114` | `0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E` | USD Coin | high |
-| Avalanche Fuji | `eip155:43113` | `0x5425890298aed601595a70AB815c96711a31Bc65` | USD Coin | medium |
+| Avalanche Fuji | `eip155:43113` | `0x5425890298aed601595a70AB815c96711a31Bc65` | USD Coin | high |
 | Solana | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` | - | high |
 | Solana Devnet | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | - | high |
 
 All entries are native (Circle-issued) USDC with 6 decimals and EIP-712 version `2`; bridged variants such as USDC.e
-are not listed and are reported as `pr.accept.asset-unknown`. Arbitrum Sepolia and OP Sepolia are known networks without
-a USDC entry. A mismatch against a `medium` entry is reported as info rather than a warning. A test checks that every
-EVM address in the table carries a valid EIP-55 checksum, which catches most copy errors.
+are not listed and are reported as `pr.accept.asset-unknown`.
+
+The table was checked on 2026-10-30. Every address matches Circle's list,
+<https://developers.circle.com/stablecoins/usdc-contract-addresses>, character for character. Circle's list does not
+give the EIP-712 domain, so for each EVM entry `name()`, `version()` and `decimals()` were read from the contract over a
+public RPC endpoint; USDC signs `transferWithAuthorization` under `name()` and version `2`. A test pins the table to
+these values, and another checks that every EVM address carries a valid EIP-55 checksum. Entries can be marked
+`medium` confidence when they are not verified against the issuer's list; a mismatch against such an entry is reported
+as info rather than a warning. No entry is `medium` at present.
 
 To add a network, add an entry to `NETWORKS` with its CAIP-2 id, name, `testnet`, the v1 short name if there was one,
 and the token (`address`, `decimals`, `eip712` for EVM, `confidence`). Please cite the issuer's contract list in the
